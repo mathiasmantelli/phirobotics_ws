@@ -1,0 +1,56 @@
+<launch>
+  <arg name="urdf" default="$(find working_on_pkg)/description/urdf/p3dx.urdf.xacro" />
+  <param name="robot_description" command="$(find xacro)/xacro $(arg urdf)" />
+  
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
+
+  <!-- ROSARIA - It launches the robot and its sensors -->
+  <!--  simulation:   _port:=localhost -->
+  <!--  rela robot:  _port:=192.168.1.11:10002 -->
+  <node name="rosaria_phi" pkg="rosaria_phi" type="RosAria" output="screen" args="_sonar_frame:=front_sonar _publish_aria_lasers:=true _port:=192.168.1.11:10002"/>
+
+
+  <!-- RVIZ - Visualization tool -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find working_on_pkg)/p3dx.rviz" required="true" />
+
+
+  <!-- CAMERA REAL SENSE D435 - It launches the RGB-D camera -->
+  <include file="$(find realsense2_camera)/launch/rs_rgbd.launch"/>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="link1_broadcaster" args="0.1 0 0.48 0 0 0 base_link camera_link"/>
+
+
+  <!-- MAP SERVER - It launches the 2D grid map -->
+  <arg name="map_file" default="$(find working_on_pkg)/maps_gmapping/inf_238_room.yaml"/>
+  <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)"/>
+  <arg name="lane_map" default="$(find working_on_pkg)/maps_gmapping/lane_map.yaml"/>
+  <node pkg="map_server" name="map_server2" type="map_server" args="$(arg lane_map)">
+    <remap from="/map" to="/lane_map"/>
+  </node>
+
+
+  <!-- AMCL - It launches the localization package -->
+  <include file="$(find working_on_pkg)/launch/amcl_launch.launch" />
+  
+  
+  <!-- MOVE BASE - It launches the navigation stack -->
+  <arg name="cmd_vel_topic" default="/rosaria_phi/cmd_vel" />
+  <arg name="odom_topic" default="odom" />
+  <arg name="move_forward_only" default="true"/>
+  <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    <!-- <param name="base_local_planner" value="dwa_local_planner/DWAPlannerROS" /> -->
+    <param name="base_local_planner" value="teb_local_planner/TebLocalPlannerROS" />
+    <rosparam file="$(find working_on_pkg)/param/costmap_common_params.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find working_on_pkg)/param/costmap_common_params.yaml" command="load" ns="local_costmap" />
+    <rosparam file="$(find working_on_pkg)/param/local_costmap_params.yaml" command="load" />
+    <rosparam file="$(find working_on_pkg)/param/global_costmap_params.yaml" command="load" />
+    <rosparam file="$(find working_on_pkg)/param/move_base_params.yaml" command="load" />
+    <remap from="cmd_vel" to="$(arg cmd_vel_topic)"/>
+    <remap from="odom" to="$(arg odom_topic)"/>
+    <param name="controller_frequency" value="50.0" />
+  </node>
+
+
+  <!-- YOLO - It launches the object detection package -->
+  <include file="$(find darknet_ros)/launch/darknet_ros.launch" /> 
+</launch>
